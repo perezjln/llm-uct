@@ -1,9 +1,14 @@
 
-from datasets import load_dataset
-import numpy as np
 import tqdm
+import numpy as np
+
+import anytree
 from anytree import Node as RenderTree
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import ollama
+from datasets import load_dataset
 
 
 prompt_improvement= """this is the current solution, it can be empty: [{current_solution}].
@@ -17,7 +22,8 @@ DO NOT ADD ANY OTHER ADDITIONAL INFORMATION.
 ONLY PROVIDE THE RATING.
 """
 
-class Node:
+
+class Node(anytree.Node):
     def __init__(self, parent=None):
         self.parent = parent
         self.current_solution = ""
@@ -37,8 +43,9 @@ class Node:
 
 
 class UCT:
-    def __init__(self, prompt, max_child=4, exploration_constant=np.sqrt(2)):
+    def __init__(self, prompt, max_child=4, exploration_constant=np.sqrt(2), num_threads=4):
         self.exploration_constant = exploration_constant
+        self.num_threads = num_threads
         self.root = None
         self.prompt = prompt
         self.max_child = max_child
@@ -63,16 +70,23 @@ class UCT:
             node.reward += reward
             node = node.parent
 
-    def uct(self, max_iterations):
-        self.root = Node()
-        for _ in tqdm.tqdm(range(max_iterations)):
-            node = self.select(self.root)
-            new_node = self.expand(node)
-            reward = self.evaluate_node(new_node)
-            new_node.reward_indiv = reward
-            self.backpropagate(new_node, reward)
+    def run_iteration(self):
+        node = self.select(self.root)
+        new_node = self.expand(node)
+        reward = self.evaluate_node(new_node)
+        self.reward_indiv = reward
+        self.backpropagate(new_node, reward)
 
-        return max(self.root.children, key=lambda child: child.visits).current_solution    
+    def uct(self, max_iterations):
+
+        self.root = Node()
+
+        with ThreadPoolExecutor(max_workers=self.num_threads) as executor:
+            futures = [executor.submit(self.run_iteration) for _ in range(max_iterations)]
+            for _ in tqdm.tqdm(as_completed(futures), total=max_iterations, desc="Running UCT: "):
+                pass
+
+        return max(self.root.children, key=lambda child: child.visits).current_solution
 
     ## Find the node with the best reward value by traversing the tree
     def find_best_node(self, node=None):
@@ -89,10 +103,8 @@ class UCT:
             stack.extend(current_node.children)
 
         return best_node
-        
-    def print_anytree(self):
-        print(RenderTree(self.root))  # Print the tree to the console
-        
+    
+    
     @staticmethod
     def ollama_chat(model, prompt_question, current_solution="", do_log=False):
     
@@ -141,21 +153,17 @@ def main():
     #data = load_dataset("lighteval/MATH", split="train", trust_remote_code=True)
     data = load_dataset("lighteval/mmlu", "philosophy", split="test", trust_remote_code=True)
 
-
     for prompt_question in data["question"]:
-        
-        print(f"Prompt: {prompt_question}")
-        
-        # Create a UCT agent
-        uct = UCT(prompt_question)
 
-        # Run the UCT algorithm for 1000 iterations
+        print(f"Prompt question: {prompt_question}")
+
+        uct = UCT(prompt_question)
         uct.uct(max_iterations=10)
         best_node = uct.find_best_node()
-        print(f"The best solution is {best_node.reward_indiv}: {best_node.current_solution}")
-        
 
+        print(f"The best solution is {best_node.reward}: {best_node.current_solution}")
 
 if __name__ == "__main__":
-    model_id = "gemma2:9b-instruct-q2_K"    
+
+    model_id = "gemma2:9b-instruct-q2_K"
     main()
