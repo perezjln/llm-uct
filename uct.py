@@ -17,14 +17,13 @@ What is the probability that all 3 cards are face cards (Jacks, Queens, or Kings
 Be short and concise.
 """
 
-prompt_improvement= """this is the current solution, it can be empty: [{current_solution}].
-task: improve the current solution.
-be short and concise.
+prompt_improvement= """Current solution (can be empty): [{current_solution}].
+Task: Improve this solution.
+Be short and concise.
 """
 
-prompt_evaluate= """this is the current solution: {current_solution}.
-task: evaluate the current solution on a scale of 1 to 10.
-DO NOT ADD ANY OTHER ADDITIONAL INFORMATION.
+prompt_evaluate= """ Current solution: {current_solution}.
+Task: Rate the solution on a scale of 1 to 10.
 ONLY PROVIDE THE RATING.
 """
 
@@ -77,12 +76,14 @@ class Node:
 
     def __repr__(self):
         return f"Node(visits={self.visits}, reward={self.reward}, current_solution={self.current_solution})"
-    
-    def ucb(self, exploration_constant=np.sqrt(2)):
+
+    def ucb(self, exploration_constant=np.sqrt(2), reward_weight=1.0, visit_weight=1.0):
         if self.parent is None:
             return float('inf')
         else:
-            return self.reward / (self.visits + 1e-9) + exploration_constant * np.sqrt(np.log(self.parent.visits) / (self.visits + 1e-9))
+            exploitation = (self.reward * reward_weight) / (self.visits + 1e-9)
+            exploration = exploration_constant * np.sqrt(np.log(self.parent.visits + 1) / (self.visits * visit_weight + 1e-9))
+            return exploitation + exploration
 
 
 class UCT:
@@ -113,7 +114,7 @@ class UCT:
 
     def uct(self, max_iterations):
         self.root = Node()
-        for _ in tqdm.tqdm(range(max_iterations)):
+        for _ in tqdm.tqdm(range(max_iterations), desc="Running UCT: "):
             node = self.select(self.root)
             new_node = self.expand(node)
             reward = self.evaluate_node(new_node)
