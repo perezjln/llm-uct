@@ -3,20 +3,7 @@ import tqdm
 from anytree import Node as RenderTree
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-prompt_question_1 = """
-You have a bag containing 3 red marbles and 5 blue marbles. 
-You randomly draw 2 marbles from the bag without replacing them. 
-What is the probability that both marbles are red?
-be short and concise.
-"""
-
-prompt_question_2 = """
-You have a standard deck of 52 playing cards. 
-You randomly draw 3 cards from the deck without replacing them. 
-What is the probability that all 3 cards are face cards (Jacks, Queens, or Kings)?
-Be short and concise.
-"""
+from problems import prompt_question_1, prompt_question_2, problem_remi
 
 prompt_improvement= """Current solution (can be empty): [{current_solution}].
 Task: Improve this solution.
@@ -31,14 +18,14 @@ ONLY PROVIDE THE RATING.
 model_id = "gemma2:9b-instruct-q2_K"
 
 import ollama
-def ollama_chat(model, current_solution=""):
+def ollama_chat(model, prompt_question, current_solution=""):
     
     print(f"ollama_chat: current_solution: {current_solution}")
     
     response = ollama.chat(model=model, messages=[
         {
             'role': 'system',
-            'content': prompt_question_2,
+            'content': prompt_question,
         },
         {
             'role': 'user',
@@ -49,14 +36,14 @@ def ollama_chat(model, current_solution=""):
     return response['message']['content']
 
 
-def ollama_evaluate(model, current_solution=""):
+def ollama_evaluate(model, prompt_question, current_solution=""):
     
     print(f"ollama_evaluate: current_solution: {current_solution}")
     
     response = ollama.chat(model=model, messages=[
         {
             'role': 'system',
-            'content': prompt_question_2,
+            'content': prompt_question,
         },
         {
             'role': 'user',
@@ -65,6 +52,7 @@ def ollama_evaluate(model, current_solution=""):
     ])
     print(f"ollama_evaluate: response: {response['message']['content']}")
     return response['message']['content']
+
 
 
 class Node:
@@ -89,10 +77,11 @@ class Node:
 
 
 class UCT:
-    def __init__(self, exploration_constant=np.sqrt(2), num_threads=4):
+    def __init__(self, prompt, exploration_constant=np.sqrt(2), num_threads=4):
         self.exploration_constant = exploration_constant
         self.num_threads = num_threads
         self.root = None
+        self.prompt = prompt
 
     def select(self, node):
         while node.children:
@@ -101,12 +90,12 @@ class UCT:
 
     def expand(self, node):
         child = Node(parent=node)
-        child.current_solution = ollama_chat(model=model_id, current_solution=node.current_solution)
+        child.current_solution = ollama_chat(model=model_id, prompt_question=self.prompt, current_solution=node.current_solution)
         node.children.append(child)
         return child
 
     def evaluate_node(self, node):
-        return float(ollama_evaluate(model=model_id, current_solution=node.current_solution))
+        return float(ollama_evaluate(model=model_id, prompt_question=self.prompt, current_solution=node.current_solution))
 
     def backpropagate(self, node, reward):
         while node:
@@ -138,7 +127,7 @@ class UCT:
 def main():
 
     # Create a UCT agent
-    uct = UCT(num_threads=4)
+    uct = UCT(prompt=problem_remi, num_threads=4)
 
     # Run the UCT algorithm for 1000 iterations
     current_solution = uct.uct(max_iterations=10)

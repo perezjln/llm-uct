@@ -2,20 +2,8 @@ import numpy as np
 import tqdm
 from anytree import Node as RenderTree
 
+from problems import prompt_question_1, prompt_question_2, problem_remi
 
-prompt_question_1 = """
-You have a bag containing 3 red marbles and 5 blue marbles. 
-You randomly draw 2 marbles from the bag without replacing them. 
-What is the probability that both marbles are red?
-be short and concise.
-"""
-
-prompt_question_2 = """
-You have a standard deck of 52 playing cards. 
-You randomly draw 3 cards from the deck without replacing them. 
-What is the probability that all 3 cards are face cards (Jacks, Queens, or Kings)?
-Be short and concise.
-"""
 
 prompt_improvement= """this is the current solution, it can be empty: [{current_solution}].
 task: add a new thought to the list of thoughts to improve the current solution.
