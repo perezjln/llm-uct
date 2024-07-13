@@ -18,7 +18,9 @@ Be short and concise.
 """
 
 prompt_improvement= """this is the current solution, it can be empty: [{current_solution}].
-task: improve the current solution.
+task: add a new thought to the list of thoughts to improve the current solution.
+if enough thoughts are added, the solution will be improved.
+if enough thoughts are present, you MUST provide the solution to the problem.
 be short and concise.
 """
 
@@ -31,9 +33,12 @@ ONLY PROVIDE THE RATING.
 model_id = "gemma2:9b-instruct-q2_K"
 
 import ollama
-def ollama_chat(model, current_solution=""):
+def ollama_chat(model, current_solution, do_print=False):
     
-    print(f"ollama_chat: current_solution: {current_solution}")
+    current_solution = "\n".join(current_solution)
+    
+    if do_print:
+        print(f"ollama_chat: current_solution: {current_solution}")
     
     response = ollama.chat(model=model, messages=[
         {
@@ -45,13 +50,19 @@ def ollama_chat(model, current_solution=""):
             'content': prompt_improvement.format(current_solution=current_solution),
         },
     ])
-    print(f"ollama_chat: response: {response['message']['content']}")
+    
+    if do_print:
+        print(f"ollama_chat: response: {response['message']['content']}")
+    
     return response['message']['content']
 
 
-def ollama_evaluate(model, current_solution=""):
+def ollama_evaluate(model, current_solution, do_print=True):
     
-    print(f"ollama_evaluate: current_solution: {current_solution}")
+    current_solution = "\n *** ".join(current_solution)
+    
+    if do_print:
+        print(f"ollama_evaluate: current_solution: {current_solution}")
     
     response = ollama.chat(model=model, messages=[
         {
@@ -63,7 +74,10 @@ def ollama_evaluate(model, current_solution=""):
             'content': prompt_evaluate.format(current_solution=current_solution),
         },
     ])
-    print(f"ollama_evaluate: response: {response['message']['content']}")
+
+    if do_print:
+        print(f"ollama_evaluate: response: {response['message']['content']}")
+
     return response['message']['content']
 
 
@@ -96,14 +110,21 @@ class UCT:
             node = max(node.children, key=lambda child: child.ucb(self.exploration_constant))
         return node
 
+    def get_current_solution_path(self, node):
+        path = []
+        while node:
+            path.append(node.current_solution)
+            node = node.parent
+        return path[::-1]
+
     def expand(self, node):
         child = Node(parent=node)
-        child.current_solution = ollama_chat(model=model_id, current_solution=node.current_solution)
+        child.current_solution = ollama_chat(model=model_id, current_solution=self.get_current_solution_path(node))
         node.children.append(child)
         return child
 
     def evaluate_node(self, node):
-        return float(ollama_evaluate(model=model_id, current_solution=node.current_solution))
+        return float(ollama_evaluate(model=model_id, current_solution=self.get_current_solution_path(node)))
 
     def backpropagate(self, node, reward):
         while node:
@@ -119,7 +140,7 @@ class UCT:
             reward = self.evaluate_node(new_node)
             self.backpropagate(new_node, reward)
 
-        return max(self.root.children, key=lambda child: child.visits).current_solution    
+        return max(self.root.children, key=lambda child: child.visits)
         
     def print_anytree(self):
         print(RenderTree(self.root))  # Print the tree to the console
@@ -134,7 +155,8 @@ def main():
     current_solution = uct.uct(max_iterations=10)
 
     # Print the best action
-    print(f"The best solution is: {current_solution}")
+    best_path = "\n".join(uct.get_current_solution_path(current_solution))
+    print(f"The best solution is: {best_path}")
     
     uct.print_anytree()
 
