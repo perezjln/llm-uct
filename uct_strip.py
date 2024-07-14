@@ -70,12 +70,14 @@ Actions:
         Postconditions: Have(bananas)
 """
 
-prompt_improvement= """this is the current solution, it can be empty: [{current_solution}].
+prompt_improvement= """
+This is the current solution, it can be empty: [{current_solution}].
 task: improve the current solution.
 ALWAYS be short and concise.
 """
 
-prompt_evaluate= """this is the current solution: {current_solution}.
+prompt_evaluate= """
+This is the current solution: {current_solution}.
 task: evaluate the current solution on a scale of 1 to 10.
 DO NOT ADD ANY OTHER ADDITIONAL INFORMATION.
 ONLY PROVIDE THE RATING.
@@ -154,6 +156,22 @@ class UCT:
 
         return best_node
         
+    def sort_all_nodes(self, node=None):
+        if node is None:
+            node = self.root
+
+        lst_nodes = []
+        stack = [node]
+        while stack:
+            current_node = stack.pop()
+            current_node.children = sorted(current_node.children, key=lambda child: child.reward_indiv, reverse=True)
+            stack.extend(current_node.children)
+            lst_nodes.extend(current_node.children)
+        
+        lst_nodes = sorted(lst_nodes, key=lambda child: child.reward_indiv, reverse=True)
+        return lst_nodes
+
+        
     def print_anytree(self):
         print(RenderTree(self.root))  # Print the tree to the console
         
@@ -200,23 +218,30 @@ class UCT:
         return float(response['message']['content'].strip())
 
 
-def main():
+def main(max_iterations=6):
 
-    
     # Create a UCT agent
     uct = UCT(current_task_prompt)
 
     # Run the UCT algorithm for 1000 iterations
-    uct.uct(max_iterations=10)
+    uct.uct(max_iterations=max_iterations)
     best_node = uct.find_best_node()
     print(f"The best solution is {best_node.reward_indiv}: {best_node.current_solution}")
+    
+    lst_node = uct.sort_all_nodes()
+
+    for node in lst_node:
+        print(f"{node.reward_indiv}: {node.current_solution.strip()}")
         
 
 
 if __name__ == "__main__":
-    model_id = "gemma2:9b-instruct-q2_K"
-    idx_task = 1
     
-    current_task_prompt = "\n\n".join([prompt_question, lst_tasks[idx_task], prompt_actions])
+    idx_task = 5
+    model_id = "gemma2:9b-instruct-q2_K"
+    
+    current_task_prompt = "\n\n".join([prompt_question, 
+                                       lst_tasks[idx_task], 
+                                       prompt_actions])
     print(current_task_prompt)
     main()
